@@ -146,6 +146,12 @@ The released triples in [../knowledge_graph/graph/](../knowledge_graph/graph/) g
 python pipeline/scripts/kg_from_release.py <corpus>/
 ```
 
+Without the papers, `standin_corpus.py` makes a test corpus from the released triples alone: one passage per 2,000 characters of a paper's triple sentences, behind its title, and no figures. The agents run on it end to end, with less evidence to cite.
+
+```bash
+python pipeline/scripts/standin_corpus.py <corpus>/
+```
+
 ## Changing the problem
 
 `design.py` holds everything about the design problem. `DESIGN` lists the fields the designer fills, each with a description of the evidence it needs. `UNIT`, `SCALE` and `RANGE` tell the source check how to find a numeric value, and `ASK` is the checker's question for each numeric field. `make_geometry` builds the part, and `CRITERIA` lists what the judge decides. `pattern.py` holds the pattern parameters and their checks, `fabrication.py` the processes and their print parameters, and `novelty.py` the score and the spellings of each option and pattern feature. The tools live in [../tools/](../tools/). The prompts in `graph.py` do not name the problem, so a new problem needs new fields, criteria and tools, and no prompt changes.
