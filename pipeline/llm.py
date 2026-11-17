@@ -14,18 +14,19 @@ from pathlib import Path
 
 import numpy as np
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, Timeout
 
 # Values already in the environment win over the file. The file may also set SSL_CERT_FILE for a network that
 # re-signs TLS, which the HTTP client reads when it is created below.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
-# A hosted endpoint can answer 429 when its rate limit is reached; the client waits and retries.
+# A hosted endpoint can answer 429 when its rate limit is reached; the client waits and retries. A reply may take
+# long, but a connection that does not open in 20 s will not, so an unreachable network fails in minutes.
 client = OpenAI(base_url=os.getenv("LLM_BASE_URL", "http://localhost:11434/v1"),
-                api_key=os.getenv("LLM_API_KEY", "none"), timeout=1800, max_retries=6)
+                api_key=os.getenv("LLM_API_KEY", "none"), timeout=Timeout(1800, connect=20), max_retries=6)
 embed_client = client if not os.getenv("EMBED_BASE_URL") else OpenAI(
     base_url=os.getenv("EMBED_BASE_URL"), api_key=os.getenv("EMBED_API_KEY", os.getenv("LLM_API_KEY", "none")),
-    timeout=600, max_retries=6)
+    timeout=Timeout(600, connect=20), max_retries=6)
 
 MAX_TOKENS = 8192
 # OpenAI's reasoning models count their reasoning within max_completion_tokens, so they get more room.
