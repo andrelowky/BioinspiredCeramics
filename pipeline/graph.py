@@ -19,6 +19,7 @@ prompts are generic, and the problem itself is defined by design.py and the tool
 
 import json
 import operator
+import os
 import re
 from pathlib import Path
 from typing import Annotated, TypedDict
@@ -49,7 +50,12 @@ MODELS = {"planner": ("gpt-oss:20b", "low"),
           "fabricator": ("gpt-oss:20b", "medium"),
           "reporter": ("gpt-oss:20b", "low")}
 EMBEDDING = "embeddinggemma"
-MAX_CANDIDATES = 3  # designs simulated and judged in one run
+# On a hosted endpoint, LLM_MODEL gives every agent one model, each keeping its effort, and EMBED_MODEL the
+# embedding model (from the environment or .env, see llm.py). The model must read images, for the figure reader.
+if os.getenv("LLM_MODEL"):
+    MODELS = {agent: (os.environ["LLM_MODEL"], effort) for agent, (model, effort) in MODELS.items()}
+EMBEDDING = os.getenv("EMBED_MODEL") or EMBEDDING
+MAX_CANDIDATES = int(os.getenv("MAX_CANDIDATES", 3))  # designs simulated and judged in one run
 # An accepted candidate with a novelty below this sends the designer back for a less reported combination.
 NOVELTY_TARGET = 0.5
 FIELDS = json.dumps(DESIGN)
@@ -434,7 +440,8 @@ def build(models, corpus):
                 try:
                     out, rec = ask("figure_reader", FIGURE_READER, f"Caption: {p['text']}\nDesign fields: {FIELDS}",
                                    [corpus["folder"] / p["image"]])
-                except (APIError, ValueError) as e:  # the server can fail on one image, as with a GPU fault
+                # The server can fail on one image, as with a GPU fault, and a corpus can lack an image file.
+                except (APIError, ValueError, OSError) as e:
                     trace.append({"agent": "figure_reader", "figure": p["id"], "error": f"{type(e).__name__}: {str(e)[:200]}"})
                     continue
                 out["values"] = [v for v in out.get("values") or [] if reading(v)]

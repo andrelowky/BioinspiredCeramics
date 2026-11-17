@@ -20,7 +20,7 @@ from tools.md import md_interface
 
 from .geometry import layered_geometry
 from .graph import EMBEDDING, ENGINEER, MODELS
-from .llm import ask_json, chat, client, embed, user
+from .llm import ask_json, chat, client, embed, embed_client, user
 
 SMALL = {"ceramic": "alumina", "interlayer": "PMMA", "layer_modulus_GPa": 380, "layer_thickness_um": 10, "interlayer_thickness_um": 2}
 
@@ -35,12 +35,13 @@ def check(name, f):
 
 
 def missing_models():
-    served = {m.id for m in client.models.list()}
+    # The endpoint is named by its settings only, since a hosted one carries the name of its resource.
+    served = {m.id for m in client.models.list()} | {m.id for m in embed_client.models.list()}
     needed = {model for model, effort in MODELS.values()} | {EMBEDDING}
     missing = sorted(m for m in needed if m not in served and f"{m}:latest" not in served)
     if missing:
-        raise LookupError(f"{client.base_url} does not serve {missing}, pull them first")
-    return f"all {len(needed)} served by {client.base_url}"
+        raise LookupError(f"LLM_BASE_URL or EMBED_BASE_URL does not serve {missing}, pull or deploy them first")
+    return f"all {len(needed)} served: {', '.join(sorted(needed))}"
 
 
 def tool_call():

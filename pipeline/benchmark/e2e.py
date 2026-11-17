@@ -17,6 +17,7 @@ benchmark/results/e2e.jsonl ran in early October 2026 on the earlier graph, with
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -54,8 +55,10 @@ def team(text, reader, designer_effort="medium", effort="none"):
             "figure_reader": (reader, "none")}
 
 
-CONFIGS = {"gpt-oss:20b + qwen3.6:35b reader": MODELS}
-REPEATS = 2
+# LLM_MODEL (see graph.py) runs every agent on one hosted model, and the rows say so.
+CONFIGS = {f"{os.environ['LLM_MODEL']} for every agent" if os.getenv("LLM_MODEL")
+           else "gpt-oss:20b + qwen3.6:35b reader": MODELS}
+REPEATS = int(os.getenv("E2E_REPEATS", 2))
 
 
 def checks(s):

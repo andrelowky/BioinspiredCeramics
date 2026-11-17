@@ -120,12 +120,30 @@ ssh -N -L 11434:localhost:11434 <user>@<spark-host>
 LLM_BASE_URL=http://localhost:11434/v1 python -m pipeline.run "<question>" <corpus>/
 ```
 
+### On a laptop, with hosted models
+
+Without a Spark, the agents can run against models on Azure AI Foundry, or any OpenAI-compatible endpoint, and the tools on the laptop's CPU. `setup_laptop.sh` builds two environments outside the repository, one with JAX for the CPU and one with PyTorch for the CPU and MACE, which `md_bulk` needs for silicon carbide. It needs Python 3.12 or newer with `venv` (on WSL, `PYTHON=~/miniconda3/bin/python` when the system Python lacks `ensurepip`). Copy `.env.example` to `.env` and set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` (one deployment for every agent, which must read images, such as `gpt-5.4`) and `EMBED_MODEL` (such as `text-embedding-3-large`). `laptop.sh` runs a command in the environment and trusts `certbundle.crt` in the repository root, for a network that re-signs TLS.
+
+```bash
+PYTHON=~/miniconda3/bin/python bash pipeline/scripts/setup_laptop.sh
+bash pipeline/scripts/laptop.sh python -m pipeline.check
+bash pipeline/scripts/laptop.sh python -m pipeline.run "<question>" data/corpus/
+```
+
+Each agent keeps its reasoning effort, except that a call with tools, the engineer's, runs without reasoning on OpenAI's reasoning models (`gpt-5`, `o` series), since their chat completions reject tools with a reasoning effort from gpt-5.4 on. These models also take `max_completion_tokens` and no temperature, so their runs are not deterministic. A new embedding model embeds the whole corpus at the first load, about 81,000 records, block by block, and a load that stops resumes from the last block. `MAX_CANDIDATES=1` and `FEM_ROWS=30` make a quick test run.
+
 ## Corpus
 
 No corpus is part of this repository. `scripts/build_corpus.py` turns papers converted to markdown, for example by Marker, into `chunks.jsonl`, with one record per passage of up to about 2,000 characters and one per figure with its caption. It turns per-paper triple files, JSON lists of `node_1`, `node_2`, `edge` and `paper`, into `kg.jsonl`. The first load embeds every record and caches the vectors in the corpus folder.
 
 ```bash
 python pipeline/scripts/build_corpus.py <markdown_papers>/ <corpus>/ <triples>/
+```
+
+The released triples in [../knowledge_graph/graph/](../knowledge_graph/graph/) give `kg.jsonl` without the per-paper files, with each paper's DOI as source.
+
+```bash
+python pipeline/scripts/kg_from_release.py <corpus>/
 ```
 
 ## Changing the problem
@@ -145,7 +163,7 @@ python pipeline/scripts/build_corpus.py <markdown_papers>/ <corpus>/ <triples>/
 
 ## Tests
 
-The tests need no model server. `test_geometry` compares the section with analytic fractions for flat layers, shells and tablets, and checks that every road lies in ceramic, in under 3 s. `test_novelty` checks the proposals on corpora of a few triples. `test_graph` stubs the models and the search, and covers the knowledge graph proposals, the repair loop, the second reading, the geometry and handoff files, the judge loop, the novelty reward, the recipe check, the print files and the report sections. `test_graph` and `test_fem_tool` run the crack tool on a coarse grid of 30 pixel rows, set by `FEM_ROWS`, so that each call takes seconds. `test_graph` then takes about four minutes on six CPU cores.
+The tests need no model server. `test_llm` checks the request options sent to a local model and to an OpenAI reasoning model. `test_geometry` compares the section with analytic fractions for flat layers, shells and tablets, and checks that every road lies in ceramic, in under 3 s. `test_novelty` checks the proposals on corpora of a few triples. `test_graph` stubs the models and the search, and covers the knowledge graph proposals, the repair loop, the second reading, the geometry and handoff files, the judge loop, the novelty reward, the recipe check, the print files and the report sections. `test_graph` and `test_fem_tool` run the crack tool on a coarse grid of 30 pixel rows, set by `FEM_ROWS`, so that each call takes seconds. `test_graph` then takes about four minutes on six CPU cores.
 
 ```bash
 python -m pipeline.tests.test_source_check

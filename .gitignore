@@ -1,5 +1,6 @@
-# Secrets
+# Secrets, and the corporate CA bundle each user brings
 .env
+certbundle.crt
 
 # Project data is shared separately (out-of-band, not via git).
 # Drop the received `data/` folder into the repo root before running scripts.

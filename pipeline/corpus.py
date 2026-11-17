@@ -7,14 +7,43 @@ An optional kg.jsonl holds one triple per line, such as
   {"head": "nacre", "relation": "Nacre deflects cracks along ...", "tail": "crack deflection", "source": "..."}
 """
 
+import hashlib
 import itertools
 import json
 import re
+import shutil
 from pathlib import Path
 
 import numpy as np
 
 from .llm import embed
+
+BLOCK = 4096  # records embedded and saved together while a corpus is embedded for the first time
+
+
+def embed_records(chunks, embed_model, cache):
+    """The vectors of every record, embedded block by block. Each block is saved as it finishes, so a first load
+    that stops, for example at a rate limit of a hosted model, resumes from the last block when run again."""
+    # A single long paragraph, such as a table, can exceed the 2,000-character chunk size. Embedding
+    # only its start keeps every vector on a similar amount of text.
+    texts = [c["text"][:2000] for c in chunks]
+    ids = hashlib.sha1("\n".join(c["id"] for c in chunks).encode()).hexdigest()[:12]
+    parts = cache.with_name(f"{cache.stem}.parts-{ids}")
+    parts.mkdir(exist_ok=True)
+    blocks = []
+    for n, i in enumerate(range(0, len(texts), BLOCK)):
+        part = parts / f"{n:05d}.npy"
+        if not part.exists():
+            tmp = part.with_suffix(".tmp")
+            with open(tmp, "wb") as f:
+                np.save(f, embed(embed_model, texts[i:i + BLOCK]))
+            tmp.replace(part)
+            print(f"embedded {min(i + BLOCK, len(texts))} of {len(texts)} corpus records with {embed_model}", flush=True)
+        blocks.append(np.load(part))
+    vectors = np.concatenate(blocks)
+    np.save(cache, vectors)
+    shutil.rmtree(parts)
+    return vectors
 
 
 def load(folder, embed_model):
@@ -23,10 +52,7 @@ def load(folder, embed_model):
     cache = folder / f"vectors-{embed_model.replace(':', '-').replace('/', '-')}.npy"
     vectors = np.load(cache) if cache.exists() else []
     if len(vectors) != len(chunks):  # no cache yet, or the corpus was rebuilt
-        # A single long paragraph, such as a table, can exceed the 2,000-character chunk size. Embedding
-        # only its start keeps every vector on a similar amount of text.
-        vectors = embed(embed_model, [c["text"][:2000] for c in chunks])
-        np.save(cache, vectors)
+        vectors = embed_records(chunks, embed_model, cache)
     kg = folder / "kg.jsonl"
     return {"folder": folder, "chunks": chunks, "vectors": vectors, "embed_model": embed_model,
             "is_figure": np.array(["image" in c for c in chunks]),
