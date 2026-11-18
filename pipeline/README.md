@@ -130,7 +130,7 @@ bash pipeline/scripts/laptop.sh python -m pipeline.check
 bash pipeline/scripts/laptop.sh python -m pipeline.run "<question>" data/corpus/
 ```
 
-Each agent keeps its reasoning effort, except that a call with tools, the engineer's, runs without reasoning on OpenAI's reasoning models (`gpt-5`, `o` series), since their chat completions reject tools with a reasoning effort from gpt-5.4 on. These models also take `max_completion_tokens` and no temperature, so their runs are not deterministic. A new embedding model embeds the whole corpus at the first load, about 81,000 records, block by block, and a load that stops resumes from the last block. `MAX_CANDIDATES=1` and `FEM_ROWS=30` make a quick test run.
+Each agent keeps its reasoning effort, except that a call with tools, the engineer's, runs without reasoning on OpenAI's reasoning models (`gpt-5`, `o` series), since their chat completions reject tools with a reasoning effort from gpt-5.4 on. These models also take `max_completion_tokens` and no temperature, so their runs are not deterministic. A new embedding model embeds the whole corpus at the first load, about 81,000 records, block by block, and a load that stops resumes from the last block. `MAX_CANDIDATES=1` and `FEM_ROWS=30` make a quick test run. `GCODE_PLIES=3` writes the direct-ink-writing G-code of the first three plies only, as its header says: a design with layers of a few micrometres has hundreds of plies of over 100,000 roads each on the 45 mm bar, about 28 GB of G-code and nearly three hours of writing on a laptop. The G-code goes to disk ply by ply, so memory stays under 1 GB either way.
 
 ## Corpus
 

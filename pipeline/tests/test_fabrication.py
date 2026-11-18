@@ -1,5 +1,5 @@
 # Tests for the print files and figures. python -m pipeline.tests.test_fabrication
-import json, math, shutil
+import json, math, os, shutil
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -192,6 +192,14 @@ bound = [x for x in job["layers"] if x.get("printed", True)]
 check("powder layers are at most 100 µm with 70 % binder saturation",
       all(x["thickness_um"] <= 100 and x["binder_saturation_percent"] == 70 for x in bound) and len(bound) == rb["printed_layers"] == 3 * n)
 check("binder jetting layers add up to the bar height", abs(sum(x["thickness_um"] for x in job["layers"]) / 1000 - H) < 1e-3)
+
+os.environ["GCODE_PLIES"] = "2"
+rc = write_fabrication(g, "direct ink writing", {}, "runs_test/fab/diw_cap")
+del os.environ["GCODE_PLIES"]
+capped = sorted({p[7] for p in gcode(rc["files"]["gcode"])[0]})
+check("GCODE_PLIES=2 writes the first two plies and says so in the header", capped == [0, 1]
+      and any(f"first 2 of {n} plies" in x for x in rc["notes"]) and f"first 2 of {n} plies" in
+      Path(rc["files"]["gcode"]).read_text() and not (Path(rc["files"]["gcode"]).parent / "print.gcode.part").exists(), capped)
 
 try:
     write_fabrication(g, "fused filament fabrication", {}, "runs_test/fab/none")

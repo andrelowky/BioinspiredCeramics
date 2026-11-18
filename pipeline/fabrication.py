@@ -10,6 +10,8 @@ for oxide ceramics and are labeled as defaults.
 
 import json
 import math
+import os
+import shutil
 from pathlib import Path
 
 import matplotlib
@@ -124,8 +126,14 @@ def direct_ink_writing(spec, v, p, out):
         notes.append(f"Breaks leave {s * 1000:g} µm gaps between road ends. A bead spreads past its end by up to about half "
                      f"its {w * 1000:g} µm width, so a gap this narrow may close before sintering.")
 
+    # A fine pattern on a bar of millimeters runs to hundreds of millions of lines, more than memory holds, so each
+    # ply goes to disk when it is done. The header, which needs the totals, is put in front of it at the end.
+    # GCODE_PLIES, when set, writes only the first plies, for a test run on a laptop: such a pattern takes hours.
+    cap = int(os.getenv("GCODE_PLIES") or 0)
+    part = out / "print.gcode.part"
+    stream = part.open("w")
     body, first, here, tool, changes, printed, travel, count = [], [], np.zeros(3), 0, 0, 0.0, 0.0, 0
-    for k, ply in enumerate(plan):
+    for k, ply in enumerate(plan[:cap or None]):
         r = roads(pat, d, n, height, k, (length, width))
         first += [r] * (k < 3)
         if shell:
@@ -171,7 +179,13 @@ def direct_ink_writing(spec, v, p, out):
                          + f" F{fp:g}" * (i == 0) for i, (x, y, q) in enumerate(zip(road[1:, 0], road[1:, 1], seg))]
                 printed += seg.sum()
                 here = road[-1]
-    minutes = (printed / v["print_speed_mm_s"] + travel / v["travel_speed_mm_s"] + changes * v["tool_change_s"]) / 60
+        stream.write("".join(f"{x}\n" for x in body).replace("µ", "u"))
+        body = []
+    stream.close()
+    if 0 < cap < len(plan):
+        notes.append(f"Only the first {cap} of {len(plan)} plies are written, as GCODE_PLIES asks, and the estimated "
+                     "print time covers those plies.")
+    minutes =(printed / v["print_speed_mm_s"] + travel / v["travel_speed_mm_s"] + changes * v["tool_change_s"]) / 60
 
     head = [f"; Direct ink writing of a bar of {length:g} x {width:g} x {height:g} mm, {n} plies stacked along z",
             f"; Design with {d['ceramic']} layers of {d['layer_thickness_um']:g} um and {d['interlayer']} interlayers of "
@@ -192,7 +206,11 @@ def direct_ink_writing(spec, v, p, out):
     head += [f"; {x}" for x in notes] + [f"; Estimated print time {minutes:.1f} min", ";",
                                          "G21 ; mm", "G90 ; absolute XYZ", "M83 ; relative E", "G28 ; home", "T0"]
     tail = [f"G0 Z{height + v['z_hop_mm']:.3f} F{ft:g}", "M84 ; motors off"]
-    (out / "print.gcode").write_text("\n".join(head + body + tail).replace("µ", "u") + "\n")
+    with (out / "print.gcode").open("w") as f, part.open() as b:
+        f.write("\n".join(head).replace("µ", "u") + "\n")
+        shutil.copyfileobj(b, f, 1 << 24)
+        f.write("\n".join(tail) + "\n")
+    part.unlink()
     legend = {"ceramic": f"{d['ceramic']} {'core' if shell else 'paste'}" + f", {d['layer_modulus_GPa']:g} GPa" * graded + ", T0",
               "interlayer": f"{d['interlayer']} " + ("shell, T0" if shell else "paste, T1")}
     return {"files": {"gcode": str(out / "print.gcode")}, "layers": layers, "printed_layers": count,
